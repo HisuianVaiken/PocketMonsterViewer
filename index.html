@@ -1,0 +1,1004 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#14161a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<title>Model Viewer (bundles)</title>
+<style>
+  :root {
+    --bg: #14161a; --panel: #1c1f25; --panel2: #23272f; --line: #2e333d;
+    --text: #e6e8ec; --muted: #8b93a1; --accent: #f2c14e; --accent2: #5aa9e6; --bad: #e0605a;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
+    font: 13px/1.4 system-ui, -apple-system, "Segoe UI", sans-serif; overflow: hidden; }
+  #app { display: grid; grid-template-columns: 260px 1fr 290px; height: 100%; }
+  aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; min-height: 0; }
+  aside.right { border-right: 0; border-left: 1px solid var(--line); overflow-y: auto; }
+  header { padding: 12px 12px 8px; border-bottom: 1px solid var(--line); }
+  header h1 { font-size: 14px; margin: 0 0 8px; letter-spacing: .02em; }
+  input[type=search], select, input[type=text] { width: 100%; background: var(--panel2); color: var(--text);
+    border: 1px solid var(--line); border-radius: 6px; padding: 6px 8px; font: inherit; }
+  #list { overflow-y: auto; flex: 1; min-height: 0; }
+  .item { padding: 6px 12px; cursor: pointer; display: flex; justify-content: space-between; gap: 6px; border-bottom: 1px solid #0000; }
+  .item:hover { background: var(--panel2); }
+  .item.sel { background: #2c3340; box-shadow: inset 3px 0 var(--accent); }
+  .item .n { font-variant-numeric: tabular-nums; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .item .t { color: var(--muted); font-size: 11px; white-space: nowrap; }
+  .star { color: var(--accent); }
+  .filters { display: flex; gap: 10px; margin-top: 8px; color: var(--muted); flex-wrap: wrap; }
+  .filters label { display: flex; gap: 4px; align-items: center; cursor: pointer; }
+  main { position: relative; min-width: 0; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #hud { position: absolute; left: 12px; top: 10px; pointer-events: none; text-shadow: 0 1px 2px #000; }
+  #hud .title { font-size: 16px; font-weight: 600; }
+  #hud .sub { color: var(--muted); }
+  #status { position: absolute; left: 50%; top: 50%; transform: translate(-50%,-50%); color: var(--muted); }
+  #errors { position: absolute; left: 12px; bottom: 10px; right: 12px; color: var(--bad); font-size: 12px; white-space: pre-wrap; max-height: 30%; overflow: auto; pointer-events: none; }
+  section { padding: 10px 12px; border-bottom: 1px solid var(--line); }
+  section h2 { font-size: 11px; text-transform: uppercase; letter-spacing: .08em; color: var(--muted); margin: 0 0 8px; font-weight: 600; }
+  .row { display: grid; grid-template-columns: 92px 1fr 38px; gap: 6px; align-items: center; margin: 5px 0; }
+  .row span.v { color: var(--muted); font-size: 11px; text-align: right; font-variant-numeric: tabular-nums; }
+  input[type=range] { width: 100%; accent-color: var(--accent); }
+  button { background: var(--panel2); color: var(--text); border: 1px solid var(--line); border-radius: 6px; padding: 5px 9px; font: inherit; cursor: pointer; }
+  button:hover { border-color: var(--accent); }
+  button.on { background: var(--accent); color: #1b1b1b; border-color: var(--accent); }
+  .btns { display: flex; gap: 6px; flex-wrap: wrap; }
+  .anims { display: flex; flex-direction: column; gap: 3px; }
+  .anims button { text-align: left; display: flex; justify-content: space-between; }
+  .anims button small { color: inherit; opacity: .7; }
+  .check { display: flex; align-items: center; gap: 6px; margin: 3px 0; cursor: pointer; }
+  .check small { color: var(--muted); }
+  .muted { color: var(--muted); }
+  #timeline { width: 100%; }
+  /* floating viewport bar (always visible, the only UI in immersive mode) */
+  #fsBar { position: absolute; right: 10px; top: 10px; display: flex; gap: 6px; align-items: center; z-index: 5; }
+  #fsBar button, #fsBar select { background: #1c1f25cc; backdrop-filter: blur(6px); border: 1px solid #ffffff22; color: var(--text);
+    border-radius: 8px; height: 34px; min-width: 34px; padding: 0 9px; font-size: 15px; }
+  #fsBar select { width: auto; max-width: 160px; font-size: 13px; }
+  #fsBar .imm { display: none; }
+  #app.immersive .imm { display: inline-block; }
+  #app.immersive { grid-template-columns: 1fr; grid-template-rows: 100vh; grid-template-rows: 100dvh; height: 100vh; height: 100dvh; }
+  #app.immersive > aside { display: none; }
+  #app.immersive #hud .sub { display: none; }
+  @media (max-width: 900px) {
+    #app { grid-template-columns: 1fr; grid-template-rows: 62vh auto 55vh; height: auto; }
+    #app > main { order: -1; position: sticky; top: 0; z-index: 3; height: 62vh; }
+    #app > aside.right { order: 0; overflow: visible; }
+    #app > aside:first-child { order: 1; }
+    html, body { overflow: auto; }
+    aside { border: 0; }
+    #app.immersive { grid-template-rows: 100vh; height: 100vh; }
+    #app.immersive > main { height: 100vh; }
+    #hud .sub { display: none; }
+  }
+  #app.immersive > main { height: 100vh; height: 100dvh; }
+</style>
+<script type="importmap">
+{ "imports": {
+  "three": "./vendor/three/three.module.js",
+  "three/addons/controls/OrbitControls.js": "./vendor/three/controls/OrbitControls.js"
+} }
+</script>
+</head>
+<body>
+<div id="app">
+  <aside>
+    <header>
+      <h1>Model Viewer</h1>
+      <input id="search" type="search" placeholder="Search (name, dex number, rare, ob01)">
+      <div class="filters">
+        <label><input type="checkbox" id="fShiny"> Shiny only</label>
+        <label><input type="checkbox" id="fNormal"> Hide shiny</label>
+      </div>
+    </header>
+    <div id="list"></div>
+  </aside>
+
+  <main>
+    <canvas id="c"></canvas>
+    <div id="hud"><div class="title" id="hTitle"></div><div class="sub" id="hSub"></div></div>
+    <div id="status">Loading index…</div>
+    <div id="errors"></div>
+    <div id="fsBar">
+      <button class="imm" id="bPrev" title="Previous model">‹</button>
+      <select class="imm" id="animSel" title="Animation"></select>
+      <button class="imm" id="bNext" title="Next model">›</button>
+      <button id="bPanels" title="Hide/show panels (H)">☰</button>
+      <button id="bFull" title="Fullscreen (F)">⛶</button>
+    </div>
+  </main>
+
+  <aside class="right">
+    <section>
+      <h2>Animation</h2>
+      <div class="anims" id="anims"></div>
+      <div class="btns" style="margin-top:8px">
+        <button id="bPlay" class="on">Pause</button>
+        <button id="bLoop" class="on">Loop</button>
+        <button id="bRest">Bind pose</button>
+      </div>
+      <div class="row"><label>Time</label><input type="range" id="timeline" min="0" max="1" step="0.001" value="0"><span class="v" id="vTime">0</span></div>
+      <div class="row"><label>Speed</label><input type="range" id="speed" min="0" max="2" step="0.05" value="1"><span class="v" id="vSpeed">1</span></div>
+    </section>
+    <section id="exprSec">
+      <h2>Expressions</h2>
+      <div id="expr"></div>
+    </section>
+    <section>
+      <h2>Lighting (shader globals)</h2>
+      <div class="row"><label>Azimuth</label><input type="range" id="lAz" min="-180" max="180" step="1" value="35"><span class="v" id="vAz"></span></div>
+      <div class="row"><label>Elevation</label><input type="range" id="lEl" min="-90" max="90" step="1" value="40"><span class="v" id="vEl"></span></div>
+      <div class="row"><label>Light coeff.</label><input type="range" id="lCoef" min="0" max="1" step="0.01" value="0.6"><span class="v" id="vCoef"></span></div>
+      <div class="row"><label>Anti-glare</label><input type="range" id="lGlare" min="0" max="1" step="0.01" value="0"><span class="v" id="vGlare"></span></div>
+      <div class="row"><label>Light color</label><input type="color" id="lCol" value="#ffffff"><span></span></div>
+      <label class="check"><input type="checkbox" id="lFollow" checked> Light follows camera</label>
+    </section>
+    <section>
+      <h2>View</h2>
+      <div class="row"><label>Background</label><input type="color" id="bg" value="#3a4250"><span></span></div>
+      <label class="check"><input type="checkbox" id="vGrid" checked> Ground grid</label>
+      <label class="check"><input type="checkbox" id="vBones"> Show skeleton</label>
+      <label class="check"><input type="checkbox" id="vRotate"> Turntable</label>
+      <div class="btns" style="margin-top:6px"><button id="bFrame">Frame model</button><button id="bShot">Screenshot</button></div>
+    </section>
+    <section>
+      <h2>Meshes</h2>
+      <div id="meshes" class="muted">—</div>
+    </section>
+    <section>
+      <h2>Materials</h2>
+      <div id="mats" class="muted">—</div>
+    </section>
+  </aside>
+</div>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+
+const $ = id => document.getElementById(id);
+THREE.ColorManagement.enabled = false;
+// data location: local 'data/' folder by default, or ?data=<base url> (e.g. data hosted elsewhere)
+// Reads the game's Unity bundles directly (no pre-export): bundles/ folder + catalog.json
+import { ShaderLib, buildModel } from './js/model.js';
+const BUNDLES = (() => { const d = new URLSearchParams(location.search).get('bundles') || window.MODEL_BUNDLES_URL || 'bundles/'; return d.endsWith('/') ? d : d + '/'; })();
+let CATALOG = null, SHADERLIB = null, BUILT = null;   // BUILT: {textures, shaders} of the current model
+const DATA = '';
+const params = new URLSearchParams(location.search);
+
+// ---------------------------------------------------------------- renderer / scene
+const canvas = $('c');
+const renderer = new THREE.WebGLRenderer({ canvas, antialias: true, preserveDrawingBuffer: true });
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.outputColorSpace = THREE.LinearSRGBColorSpace;  // Unity shaders already output display values
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(30, 1, 0.01, 1000);
+camera.position.set(0, 1, 4);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+const grid = new THREE.GridHelper(4, 16, 0x6a7385, 0x4a5262);
+scene.add(grid);
+let skelHelper = null;
+
+function resize() {
+  const r = canvas.parentElement.getBoundingClientRect();
+  renderer.setSize(r.width, r.height, false);
+  camera.aspect = r.width / Math.max(1, r.height);
+  camera.updateProjectionMatrix();
+}
+new ResizeObserver(resize).observe(canvas.parentElement);
+
+// ---------------------------------------------------------------- global shader state (Unity built-ins)
+const G = {
+  lightDir: new THREE.Vector3(0.5, 0.6, 0.6).normalize(),
+  lightColor: new THREE.Vector4(1, 1, 1, 1),
+  coef: 0.6, glare: 0, time: 0,
+};
+const tmpM = new THREE.Matrix4(), tmpVP = new THREE.Matrix4(), tmpV3 = new THREE.Vector3();
+const IDENT = new THREE.Matrix4();
+
+// ---------------------------------------------------------------- shader handling
+const shaderCache = new Map();
+async function getShader(file) {
+  if (!shaderCache.has(file)) shaderCache.set(file, Promise.resolve(prepShader(SHADERLIB.files.get(file))));
+  return shaderCache.get(file);
+}
+
+function parseUniformTypes(src, out) {
+  const re = /uniform\s+(?:(?:lowp|mediump|highp)\s+)?(\w+)\s+(\w+)\s*(\[\s*\d+\s*\])?\s*;/g;
+  let m;
+  while ((m = re.exec(src))) out[m[2]] = { type: m[1], array: !!m[3] };
+}
+
+// Inject GPU skinning in front of the original Unity vertex program
+function injectSkinning(vs) {
+  const present = {};
+  vs = vs.replace(/\bin\s+((?:lowp|mediump|highp)\s+)?(vec[234])\s+in_(POSITION0|NORMAL0|TANGENT0)\s*;/g,
+    (m, p, t, n) => { present[n] = t; return `in ${p || ''}${t} a_${n};\n${t} in_${n};`; });
+  const decl = `
+uniform highp sampler2D u_boneTex;
+uniform int u_skinned;
+in vec4 a_skinIndex;
+in vec4 a_skinWeight;
+mat4 _bone(float i) {
+  int r = int(i + 0.5);
+  return mat4(texelFetch(u_boneTex, ivec2(0, r), 0), texelFetch(u_boneTex, ivec2(1, r), 0),
+              texelFetch(u_boneTex, ivec2(2, r), 0), texelFetch(u_boneTex, ivec2(3, r), 0));
+}
+`;
+  let pro = `
+    mat4 _sk = mat4(1.0);
+    if (u_skinned == 1) {
+      _sk = a_skinWeight.x * _bone(a_skinIndex.x) + a_skinWeight.y * _bone(a_skinIndex.y)
+          + a_skinWeight.z * _bone(a_skinIndex.z) + a_skinWeight.w * _bone(a_skinIndex.w);
+    }
+`;
+  if (present.POSITION0) pro += `    in_POSITION0 = ${present.POSITION0 === 'vec4' ? '_sk * vec4(a_POSITION0.xyz, 1.0)' : `(_sk * vec4(a_POSITION0.xyz, 1.0)).${present.POSITION0 === 'vec3' ? 'xyz' : 'xy'}`};\n`;
+  if (present.NORMAL0) pro += `    in_NORMAL0 = ${present.NORMAL0 === 'vec4' ? 'vec4(mat3(_sk) * a_NORMAL0.xyz, 0.0)' : 'mat3(_sk) * a_NORMAL0.xyz'};\n`;
+  if (present.TANGENT0) pro += `    in_TANGENT0 = vec4(mat3(_sk) * a_TANGENT0.xyz, a_TANGENT0.w);\n`;
+  const mi = vs.search(/void\s+main\s*\(\s*\)\s*\{/);
+  if (mi < 0) return vs;
+  const bi = vs.indexOf('{', mi) + 1;
+  return vs.slice(0, mi) + decl + vs.slice(mi, bi) + pro + vs.slice(bi);
+}
+
+function prepShader(j) {
+  const types = {};
+  parseUniformTypes(j.vs, types); parseUniformTypes(j.fs, types);
+  const strip = x => x.replace(/^\s*#version[^\n]*\n/, '');
+  return { ...j, vs: strip(injectSkinning(j.vs)), fs: strip(j.fs), types };
+}
+
+// ---------------------------------------------------------------- textures
+const texLoader = new THREE.TextureLoader();
+const WHITE = makeSolid(255, 255, 255, 255), BLACK = makeSolid(0, 0, 0, 255), GREY = makeSolid(128, 128, 128, 255), BUMP = makeSolid(128, 128, 255, 255);
+function makeSolid(r, g, b, a) {
+  const t = new THREE.DataTexture(new Uint8Array([r, g, b, a]), 1, 1);
+  t.needsUpdate = true; return t;
+}
+const WRAP = [THREE.RepeatWrapping, THREE.ClampToEdgeWrapping, THREE.MirroredRepeatWrapping, THREE.ClampToEdgeWrapping];
+function loadTex(base, info) {
+  const mem = BUILT && BUILT.textures.get(info.file);
+  if (mem) {
+    const t = new THREE.DataTexture(mem.rgba, mem.w, mem.h, THREE.RGBAFormat);
+    t.flipY = false;   // ASTC rows are already in GL order
+    t.colorSpace = THREE.NoColorSpace;
+    t.wrapS = WRAP[info.wrapU] ?? THREE.RepeatWrapping;
+    t.wrapT = WRAP[info.wrapV] ?? THREE.RepeatWrapping;
+    if (info.filter === 0) { t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; }
+    else { t.magFilter = THREE.LinearFilter; t.minFilter = THREE.LinearMipmapLinearFilter; }
+    t.generateMipmaps = true; t.anisotropy = 4; t.needsUpdate = true;
+    return Promise.resolve(t);
+  }
+  return new Promise(res => {
+    texLoader.load(base + info.file + '?v=' + (loadModel.ver || ''), t => {
+      t.colorSpace = THREE.NoColorSpace;
+      t.wrapS = WRAP[info.wrapU] ?? THREE.RepeatWrapping;
+      t.wrapT = WRAP[info.wrapV] ?? THREE.RepeatWrapping;
+      if (info.filter === 0) { t.magFilter = THREE.NearestFilter; t.minFilter = THREE.NearestMipmapNearestFilter; }
+      t.anisotropy = 4;
+      res(t);
+    }, undefined, () => res(WHITE));
+  });
+}
+
+// ---------------------------------------------------------------- render state mapping (Unity -> three)
+const BF = [THREE.ZeroFactor, THREE.OneFactor, THREE.DstColorFactor, THREE.SrcColorFactor, THREE.OneMinusDstColorFactor,
+  THREE.SrcAlphaFactor, THREE.OneMinusSrcColorFactor, THREE.DstAlphaFactor, THREE.OneMinusDstAlphaFactor,
+  THREE.SrcAlphaSaturateFactor, THREE.OneMinusSrcAlphaFactor];
+const ZF = { 1: THREE.NeverDepth, 2: THREE.LessDepth, 3: THREE.EqualDepth, 4: THREE.LessEqualDepth, 5: THREE.GreaterDepth,
+  6: THREE.NotEqualDepth, 7: THREE.GreaterEqualDepth, 8: THREE.AlwaysDepth };
+const BOP = [THREE.AddEquation, THREE.SubtractEquation, THREE.ReverseSubtractEquation, THREE.MinEquation, THREE.MaxEquation];
+
+// ---------------------------------------------------------------- model state
+let current = null;   // { root, nodes, meshes, mixer, clips, ... }
+const clock = new THREE.Clock();
+let playing = true, looping = true, speed = 1;
+
+function clearModel() {
+  if (!current) return;
+  scene.remove(current.root);
+  current.root.traverse(o => { if (o.isMesh) { o.geometry.dispose(); } });
+  current.disposables.forEach(d => d.dispose());
+  if (skelHelper) { scene.remove(skelHelper); skelHelper = null; }
+  current = null;
+}
+
+async function loadModel(name) {
+  const token = Symbol(); loadModel.token = token;
+  $('status').textContent = 'Loading ' + name + '…'; $('status').style.display = '';
+  $('errors').textContent = '';
+  const base = '';
+  const entry = CATALOG.models.find(m => m.name === name);
+  if (!entry) throw new Error('unknown model ' + name);
+  if (!SHADERLIB) SHADERLIB = await ShaderLib.load(BUNDLES + CATALOG.shaders);
+  const t0 = performance.now();
+  const built = await buildModel(entry, BUNDLES, SHADERLIB);
+  if (loadModel.token !== token) return;
+  BUILT = built;
+  const model = built.model, bin = built.bin;
+  loadModel.ms = performance.now() - t0;
+  const f32 = (o, l) => new Float32Array(bin, o, l / 4);
+  const u32 = (o, l) => new Uint32Array(bin, o, l / 4);
+  const u16 = (o, l) => new Uint16Array(bin, o, l / 2);
+  const disposables = [];
+
+  // nodes
+  const root = new THREE.Group();
+  const nodes = model.nodes.map(n => {
+    const b = new THREE.Bone();
+    b.name = n.name;
+    b.position.fromArray(n.pos); b.quaternion.fromArray(n.rot); b.scale.fromArray(n.scl);
+    b.userData.rest = { pos: b.position.clone(), rot: b.quaternion.clone(), scl: b.scale.clone() };
+    return b;
+  });
+  model.nodes.forEach((n, i) => (n.parent >= 0 ? nodes[n.parent] : root).add(nodes[i]));
+
+  // textures
+  const texInfos = new Map();
+  for (const m of model.materials) for (const t of Object.values(m.textures)) if (t.tex) texInfos.set(t.tex.file, t.tex);
+  const texMap = new Map();
+  await Promise.all([...texInfos.values()].map(async i => { const t = await loadTex(base, i); texMap.set(i.file, t); disposables.push(t); }));
+
+  // materials -> list of passes (RawShaderMaterial)
+  const matPasses = await Promise.all(model.materials.map(async (m, mi) => {
+    const out = [];
+    for (const [pi, p] of m.passes.entries()) {
+      const sh = await getShader(p.shader);
+      out.push(buildMaterial(m, p, sh, texMap, mi, pi));
+    }
+    return out;
+  }));
+  matPasses.flat().forEach(m => disposables.push(m));
+
+  // meshes
+  const meshes = model.meshes.map((md, idx) => {
+    const geo = new THREE.BufferGeometry();
+    for (const [k, [size, off, len]] of Object.entries(md.attributes)) {
+      const a = new THREE.BufferAttribute(f32(off, len), size);
+      geo.setAttribute(k, a);
+      if (k === 'a_POSITION0') geo.setAttribute('position', a);
+      if (k === 'a_NORMAL0') geo.setAttribute('normal', a);
+    }
+    if (!md.attributes.a_skinIndex) {
+      const n = md.vertexCount;
+      geo.setAttribute('a_skinIndex', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+      geo.setAttribute('a_skinWeight', new THREE.BufferAttribute(new Float32Array(n * 4), 4));
+    }
+    if (!md.attributes.in_COLOR0) {
+      const c = new Float32Array(md.vertexCount * 4).fill(1);
+      geo.setAttribute('in_COLOR0', new THREE.BufferAttribute(c, 4));
+    }
+    for (let i = 0; i < 4; i++) if (!md.attributes['in_TEXCOORD' + i]) {
+      geo.setAttribute('in_TEXCOORD' + i, md.attributes.in_TEXCOORD0
+        ? geo.getAttribute('in_TEXCOORD0') : new THREE.BufferAttribute(new Float32Array(md.vertexCount * 2), 2));
+    }
+    const group = new THREE.Group();
+    group.name = md.name;
+    const skin = md.skin ? {
+      bones: md.skin.bones.map(i => nodes[i]),
+      inv: md.skin.boneInverses.map(a => new THREE.Matrix4().fromArray(a)),
+    } : null;
+    let boneTex = null, boneData = null;
+    if (skin) {
+      boneData = new Float32Array(skin.bones.length * 16);
+      boneTex = new THREE.DataTexture(boneData, 4, skin.bones.length, THREE.RGBAFormat, THREE.FloatType);
+      boneTex.needsUpdate = true;
+      disposables.push(boneTex);
+    }
+    const parts = [];
+    for (const sm of md.submeshes) {
+      const g = geo.clone();   // shares attribute arrays
+      for (const k of Object.keys(geo.attributes)) g.setAttribute(k, geo.getAttribute(k));
+      g.setIndex(new THREE.BufferAttribute(sm.indexType === 'u16' ? u16(sm.index[0], sm.index[1]) : u32(sm.index[0], sm.index[1]), 1));
+      g.boundingSphere = new THREE.Sphere(new THREE.Vector3(), 1e6);
+      const passes = sm.material >= 0 ? matPasses[sm.material] : [];
+      passes.forEach((mat, pi) => {
+        const mesh = new THREE.Mesh(g, mat);
+        mesh.frustumCulled = false;
+        mesh.renderOrder = mat.userData.queue * 10 + pi;
+        mesh.userData = { skinned: !!skin, node: nodes[md.node], boneTex, submesh: sm };
+        mesh.onBeforeRender = onBeforeRenderMesh;
+        if (params.get('nm')) { mesh.material = new THREE.MeshNormalMaterial(); mesh.onBeforeRender = () => {}; }
+        if (params.get('solo') != null && sm.material !== +params.get('solo')) mesh.visible = false;
+        group.add(mesh);
+        parts.push(mesh);
+      });
+    }
+    root.add(group);
+    return { md, group, skin, boneTex, boneData, parts, userVisible: true, driverVisible: true };
+  });
+
+  // animation clips
+  const clips = model.animations.map(a => buildClip(a, bin, nodes));
+
+  clearModel();
+  scene.add(root);
+  const mixer = new THREE.AnimationMixer(root);
+  current = { name, model, root, nodes, meshes, clips, mixer, disposables, action: null, clipIndex: -1, expr: {} };
+  buildUI();
+  const def = model.layers.find(l => l.index === 0);
+  const defClip = def ? def.states.find(s => s.name === def.default)?.clip : -1;
+  playClip(defClip >= 0 ? defClip : clips.findIndex(c => c.userData.loop) );
+  frameModel();
+  $('status').style.display = 'none';
+  $('hTitle').textContent = prettyName(name);
+  $('hTitle').title = name;
+  $('hSub').textContent = `${name} · read from bundles in ${Math.round(loadModel.ms)} ms · ${model.tris.toLocaleString()} triangles · ${model.meshes.length} meshes · ${model.materials.length} materials · ${model.animations.length} animations`;
+  if (skelHelper) scene.remove(skelHelper);
+  skelHelper = new THREE.SkeletonHelper(root); skelHelper.visible = $('vBones').checked; scene.add(skelHelper);
+  window.__ready = true;
+  if (params.get('layoutdbg')) setTimeout(() => {
+    const r = e => { const b = $(e) || document.querySelector(e); const q = b.getBoundingClientRect(); return e + ' ' + Math.round(q.width) + 'x' + Math.round(q.height) + ' @' + Math.round(q.left) + ',' + Math.round(q.top) + ' disp=' + getComputedStyle(b).display; };
+    const pre = document.createElement('pre'); pre.style.cssText = 'position:fixed;left:0;bottom:0;background:#000;color:#0f0;z-index:99;margin:0;font-size:12px';
+    pre.textContent = ['app','c','fsBar','main'].map(r).join(String.fromCharCode(10)) + String.fromCharCode(10) + 'cols=' + getComputedStyle($('app')).gridTemplateColumns + ' rows=' + getComputedStyle($('app')).gridTemplateRows + ' cls=' + $('app').className;
+    document.body.appendChild(pre);
+  }, 500);
+  if (params.get('debug')) {
+    current.mixer.stopAllAction(); resetPose(); updateBones();
+    const out = [];
+    for (const m of current.meshes) if (m.skin) {
+      let maxd = 0, worst = '';
+      for (let i = 0; i < m.skin.bones.length; i++) {
+        const e = m.boneData.subarray(i * 16, i * 16 + 16);
+        const id = [1,0,0,0,0,1,0,0,0,0,1,0,0,0,0,1];
+        const d = Math.max(...Array.from(e).map((x, k) => Math.abs(x - id[k])));
+        if (d > maxd) { maxd = d; worst = m.skin.bones[i].name; }
+      }
+      const g = m.parts[0].geometry; const sw = g.getAttribute('a_skinWeight').array; let wmin = 9, wmax = 0;
+      for (let v = 0; v < sw.length; v += 4) { const t = sw[v] + sw[v+1] + sw[v+2] + sw[v+3]; wmin = Math.min(wmin, t); wmax = Math.max(wmax, t); }
+      out.push(m.md.name + ' maxdev=' + maxd.toFixed(4) + ' worst=' + worst + ' w=' + wmin.toFixed(3) + '..' + wmax.toFixed(3) + ' attrs=' + Object.keys(g.attributes).join(','));
+    }
+    const pre = document.createElement('pre'); pre.id = 'dbg'; pre.style.cssText = 'position:fixed;left:0;top:0;right:0;background:#000;color:#0f0;font-size:13px;z-index:9;white-space:pre-wrap;margin:0;padding:6px'; pre.textContent = out.join(String.fromCharCode(10)); document.body.appendChild(pre);
+  }
+}
+
+function buildMaterial(m, p, sh, texMap, mi, pi) {
+  const uniforms = {};
+  const defs = sh.props || {};
+  for (const [u, info] of Object.entries(sh.types)) {
+    let v;
+    if (info.type.startsWith('sampler')) {
+      const t = m.textures[u];
+      if (t && t.tex) v = texMap.get(t.tex.file);
+      else { const d = (defs[u] && defs[u].tex) || 'white'; v = d === 'black' ? BLACK : d === 'grey' || d === 'gray' ? GREY : d === 'bump' ? BUMP : WHITE; }
+    } else if (u.endsWith('_ST') && m.textures[u.slice(0, -3)]) {
+      v = new THREE.Vector4(...m.textures[u.slice(0, -3)].st);
+    } else if (u.endsWith('_ST')) {
+      v = new THREE.Vector4(1, 1, 0, 0);
+    } else if (u.endsWith('_TexelSize')) {
+      const t = m.textures[u.slice(0, -10)]; const w = t?.tex?.w || 1, h = t?.tex?.h || 1;
+      v = new THREE.Vector4(1 / w, 1 / h, w, h);
+    } else if (u in m.colors || (defs[u] && (defs[u].type === 0 || defs[u].type === 1))) {
+      const c = m.colors[u] || defs[u].value;
+      v = sizeVec(info.type, c);
+    } else if (u in m.floats) {
+      v = m.floats[u];
+    } else if (defs[u]) {
+      v = info.type === 'float' || info.type === 'int' || info.type === 'bool' ? defs[u].value[0] : sizeVec(info.type, defs[u].value);
+    } else {
+      v = defaultBuiltin(info);
+    }
+    uniforms[u] = { value: v };
+  }
+  uniforms.u_boneTex = { value: BLACK };
+  uniforms.u_skinned = { value: 0 };
+
+  const mat = new THREE.RawShaderMaterial({ vertexShader: sh.vs, fragmentShader: sh.fs, uniforms, glslVersion: THREE.GLSL3 });
+  mat.name = m.name + (pi ? ` (pass ${pi})` : '');
+  // render state
+  mat.side = p.cull === 0 ? THREE.DoubleSide : p.cull === 1 ? THREE.BackSide : THREE.FrontSide;
+  if (params.get('ds')) mat.side = THREE.DoubleSide;
+  if (params.get('flip')) mat.side = p.cull === 0 ? THREE.DoubleSide : p.cull === 1 ? THREE.FrontSide : THREE.BackSide;
+  mat.depthWrite = !!p.zWrite;
+  mat.depthTest = p.zTest !== 0;
+  mat.depthFunc = ZF[p.zTest] ?? THREE.LessEqualDepth;
+  const opaque = p.src === 1 && p.dst === 0;
+  if (!opaque) {
+    mat.blending = THREE.CustomBlending;
+    mat.blendSrc = BF[p.src] ?? THREE.OneFactor; mat.blendDst = BF[p.dst] ?? THREE.ZeroFactor;
+    mat.blendSrcAlpha = BF[p.srcA] ?? mat.blendSrc; mat.blendDstAlpha = BF[p.dstA] ?? mat.blendDst;
+    mat.blendEquation = BOP[p.blendOp] ?? THREE.AddEquation;
+  } else mat.blending = THREE.NoBlending;
+  mat.colorWrite = p.colMask !== 0;
+  if (p.offsetFactor || p.offsetUnits) { mat.polygonOffset = true; mat.polygonOffsetFactor = p.offsetFactor; mat.polygonOffsetUnits = p.offsetUnits; }
+  const queue = m.queue > 0 ? m.queue : (opaque ? 2000 : 3000);
+  mat.transparent = queue >= 2450 || !opaque;
+  mat.userData = { queue, matIndex: mi, src: m };
+  mat.userData.baseUniforms = Object.fromEntries(Object.entries(uniforms).filter(([k, v]) => typeof v.value === 'number').map(([k, v]) => [k, v.value]));
+  return mat;
+}
+
+function sizeVec(type, a) {
+  if (type === 'vec4') return new THREE.Vector4(a[0], a[1], a[2], a[3]);
+  if (type === 'vec3') return new THREE.Vector3(a[0], a[1], a[2]);
+  if (type === 'vec2') return new THREE.Vector2(a[0], a[1]);
+  return a[0];
+}
+
+function defaultBuiltin(info) {
+  if (info.array) return new Float32Array(16);
+  switch (info.type) {
+    case 'vec4': return new THREE.Vector4();
+    case 'vec3': return new THREE.Vector3();
+    case 'vec2': return new THREE.Vector2();
+    case 'mat4': return new THREE.Matrix4();
+    case 'mat3': return new THREE.Matrix3();
+    default: return 0;
+  }
+}
+
+// per-draw Unity built-ins
+const _w2o = new THREE.Matrix4();
+function onBeforeRenderMesh(renderer, scene, cam) {
+  const u = this.material.uniforms;
+  const d = this.userData;
+  const o2w = d.skinned ? IDENT : d.node.matrixWorld;
+  setMat(u.hlslcc_mtx4x4unity_ObjectToWorld, o2w);
+  if (u.hlslcc_mtx4x4unity_WorldToObject) setMat(u.hlslcc_mtx4x4unity_WorldToObject, _w2o.copy(o2w).invert());
+  setMat(u.hlslcc_mtx4x4unity_MatrixVP, tmpVP.multiplyMatrices(cam.projectionMatrix, cam.matrixWorldInverse));
+  setMat(u.hlslcc_mtx4x4unity_MatrixV, cam.matrixWorldInverse);
+  setMat(u.hlslcc_mtx4x4unity_MatrixInvV, cam.matrixWorld);
+  setMat(u.hlslcc_mtx4x4glstate_matrix_projection, cam.projectionMatrix);
+  setMat(u.hlslcc_mtx4x4unity_MatrixMV, tmpM.multiplyMatrices(cam.matrixWorldInverse, o2w));
+  if (u._WorldSpaceCameraPos) u._WorldSpaceCameraPos.value.copy(cam.position);
+  if (u._WorldSpaceLightPos0) u._WorldSpaceLightPos0.value.set(G.lightDir.x, G.lightDir.y, G.lightDir.z, 0);
+  if (u._LightColor0) u._LightColor0.value.copy(G.lightColor);
+  if (u._GlobalLightCoefficient) u._GlobalLightCoefficient.value = G.coef;
+  if (u._GlobalAntiGlare) u._GlobalAntiGlare.value = G.glare;
+  if (u._Time) u._Time.value.set(G.time / 20, G.time, G.time * 2, G.time * 3);
+  if (u._SinTime) u._SinTime.value.set(Math.sin(G.time / 8), Math.sin(G.time / 4), Math.sin(G.time / 2), Math.sin(G.time));
+  if (u._CosTime) u._CosTime.value.set(Math.cos(G.time / 8), Math.cos(G.time / 4), Math.cos(G.time / 2), Math.cos(G.time));
+  if (u._ProjectionParams) u._ProjectionParams.value.set(1, cam.near, cam.far, 1 / cam.far);
+  if (u._ScreenParams) { const s = renderer.getSize(tmpV3); u._ScreenParams.value.set(s.x, s.y, 1 + 1 / s.x, 1 + 1 / s.y); }
+  u.u_skinned.value = d.skinned && !params.get('noskin') ? 1 : 0;
+  this.material.uniformsNeedUpdate = true;   // materials are shared between meshes: force per-draw upload
+  u.u_boneTex.value = d.boneTex || BLACK;
+}
+function setMat(u, m) { if (u) { if (u.value.isMatrix4) u.value.copy(m); else u.value = m.elements; } }
+
+// ---------------------------------------------------------------- animation
+const ONE_KEY = new Float32Array([0]);
+function buildClip(a, bin, nodes) {
+  const n = a.frames, dt = a.duration / Math.max(1, n - 1);
+  const times = new Float32Array(n); for (let i = 0; i < n; i++) times[i] = i * dt;
+  const tracks = [];
+  for (const t of a.tracks) {
+    const node = nodes[t.node]; if (!node) continue;
+    const id = node.uuid;
+    // constant tracks are stored as a single key
+    const tm = (ref, n) => (ref[1] / 4 / n) === 1 ? ONE_KEY : times;
+    if (t.pos) tracks.push(new THREE.VectorKeyframeTrack(id + '.position', tm(t.pos, 3), new Float32Array(bin, t.pos[0], t.pos[1] / 4)));
+    if (t.rot) tracks.push(new THREE.QuaternionKeyframeTrack(id + '.quaternion', tm(t.rot, 4), new Float32Array(bin, t.rot[0], t.rot[1] / 4)));
+    if (t.scl) tracks.push(new THREE.VectorKeyframeTrack(id + '.scale', tm(t.scl, 3), new Float32Array(bin, t.scl[0], t.scl[1] / 4)));
+  }
+  // UV-atlas / visibility driver nodes are stepped in the game: no blending between atlas cells
+  for (const tr of tracks) {
+    const node = nodes.find(n => tr.name.startsWith(n.uuid + '.'));
+    if (node && /^CusAnim(Mat|Vis)_/.test(node.name)) tr.setInterpolation(THREE.InterpolateDiscrete);
+  }
+  const clip = new THREE.AnimationClip(a.state || a.name, a.duration, tracks);
+  clip.userData = { loop: a.loop, src: a };
+  return clip;
+}
+
+function playClip(i) {
+  const c = current; if (!c) return;
+  c.mixer.stopAllAction();
+  resetPose();
+  c.clipIndex = i;
+  c.action = null;
+  // Always-on animator layers (e.g. "Loop Layer"): they override the base layer on the nodes they animate
+  const loops = loopLayerClips(c);
+  const overridden = new Set(loops.flatMap(k => c.clips[k].tracks.map(t => t.name)));
+  for (const k of loops) {
+    if (k === i) continue;
+    const la = c.mixer.clipAction(c.clips[k]);
+    la.setLoop(THREE.LoopRepeat, Infinity); la.play();
+  }
+  if (i >= 0 && c.clips[i]) {
+    let clip = c.clips[i];
+    if (overridden.size && !loops.includes(i)) {
+      c.filtered = c.filtered || {};
+      clip = c.filtered[i] = c.filtered[i] || new THREE.AnimationClip(clip.name, clip.duration,
+        clip.tracks.filter(t => !overridden.has(t.name)));
+    }
+    const act = c.mixer.clipAction(clip);
+    act.setLoop(looping ? THREE.LoopRepeat : THREE.LoopOnce, Infinity);
+    act.clampWhenFinished = true;
+    act.play();
+    c.action = act;
+    $('timeline').max = c.clips[i].duration;
+  }
+  document.querySelectorAll('#anims button').forEach(b => b.classList.toggle('on', +b.dataset.i === i));
+  if ($('animSel')) $('animSel').value = String(i);
+}
+
+function loopLayerClips(c) {
+  const out = [];
+  for (const L of c.model.layers) {
+    if (L.index === 0 || !(L.weight > 0)) continue;
+    const st = L.states.find(s => s.name === L.default) || L.states[0];
+    if (st && st.clip >= 0) out.push(st.clip);
+  }
+  return out;
+}
+
+function resetPose() {
+  if (!current) return;
+  for (const b of current.nodes) { const r = b.userData.rest; b.position.copy(r.pos); b.quaternion.copy(r.rot); b.scale.copy(r.scl); }
+}
+
+// Expression layers (eye / mouth): these clips are lookup tables; the game samples them at a chosen frame.
+function applyExpressions() {
+  const c = current; if (!c) return;
+  for (const [li, sel] of Object.entries(c.expr)) {
+    if (sel == null || sel.time == null) continue;
+    const clip = c.clips[sel.clip]; if (!clip) continue;
+    for (const tr of clip.tracks) {
+      const [uuid, prop] = tr.name.split('.');
+      const node = c.root.getObjectByProperty('uuid', uuid); if (!node) continue;
+      const interp = tr.createInterpolant(); const v = interp.evaluate(sel.time);
+      if (prop === 'quaternion') node.quaternion.fromArray(v); else node[prop].fromArray(v);
+    }
+  }
+}
+
+// Game script emulation: UV translate drivers + renderer visibility drivers
+const UV_MAP = { ColorUVTranslate: '_ColorBase', Layer1UVTranslate: '_Layer1Base' };
+function applyDrivers() {
+  const c = current; if (!c) return;
+  for (const d of c.model.uvDrivers) {
+    const node = c.nodes[d.node]; const mesh = c.meshes[d.mesh]; if (!node || !mesh) continue;
+    const ux = -node.position.x * 100, uy = node.position.y * 100;   // back to Unity space, metres -> UV units
+    for (const part of mesh.parts) {
+      if (part.userData.submesh.slot !== d.slot) continue;
+      const u = part.material.uniforms, base = part.material.userData.baseUniforms;
+      if (!u || !base) continue;
+      if (d.propertyType === 0) {
+        // float property driver: node "CusAnimMat_<mat>_F_<ShaderProperty>", value = translate.x (Maya space) * 100
+        const fm = node.name.match(/_F_(.+)$/);
+        const names = [fm && '_' + fm[1], '_' + d.property].filter(Boolean);
+        const un = names.find(n => u[n] !== undefined);
+        if (un && typeof u[un].value === 'number') u[un].value = node.position.x * 100;
+        continue;
+      }
+      const isScale = /Scale$/.test(d.property);
+      const p = d.property.replace(/UVTranslate$|UVScale$/, '');
+      const candidates = [UV_MAP[d.property], '_' + d.property, '_' + p + (isScale ? 'UVScale' : 'UVTranslate')].filter(Boolean);
+      for (const pre of candidates) {
+        if (u[pre + 'U'] !== undefined || u[pre + 'V'] !== undefined) {
+          if (isScale) {
+            if (u[pre + 'U']) u[pre + 'U'].value = node.scale.x;
+            if (u[pre + 'V']) u[pre + 'V'].value = node.scale.y;
+          } else {
+            // Maya-style texture placement: offset = -translate * repeat (uvScale = the material tiling)
+            const sx = d.uvScale[0] || 1, sy = d.uvScale[1] || 1;
+            if (u[pre + 'U']) u[pre + 'U'].value = (base[pre + 'U'] || 0) - ux * sx;
+            if (u[pre + 'V']) u[pre + 'V'].value = (base[pre + 'V'] || 0) - uy * sy;
+          }
+          break;
+        }
+      }
+    }
+  }
+  for (const m of c.meshes) m.driverVisible = true;
+  for (const d of c.model.visDrivers) {
+    const node = c.nodes[d.node]; const mesh = c.meshes[d.mesh]; if (!node || !mesh) continue;
+    if (Math.abs(node.position.x) <= 0.005) mesh.driverVisible = false;
+  }
+  for (const m of c.meshes) m.group.visible = m.userVisible && m.driverVisible && m.md.enabled !== false;
+}
+
+function updateBones() {
+  const c = current; if (!c) return;
+  c.root.updateMatrixWorld(true);
+  for (const m of c.meshes) {
+    if (!m.skin) continue;
+    const { bones, inv } = m.skin;
+    for (let i = 0; i < bones.length; i++) {
+      tmpM.multiplyMatrices(bones[i].matrixWorld, inv[i]);
+      tmpM.toArray(m.boneData, i * 16);
+    }
+    m.boneTex.needsUpdate = true;
+  }
+}
+
+// ---------------------------------------------------------------- UI
+let NAMES = {};
+function prettyName(n) {
+  let m = n.match(/^pm(\d{4})_(\d{2})_(\d{2})(_rare)?/);
+  if (m) {
+    const sp = NAMES[+m[1]] || `#${m[1]}`;
+    return sp + (m[2] !== '00' ? ` (form ${+m[2]})` : '') + (m[3] !== '00' ? ` [${+m[3]}]` : '') + (m[4] ? ' ★' : '');
+  }
+  return n;
+}
+
+function buildUI() {
+  const c = current;
+  // animations: base layer states first, then all other clips
+  const box = $('anims'); box.innerHTML = '';
+  const exprClips = new Set();
+  const order = [];
+  for (const L of c.model.layers) {
+    if (L.index === 0) L.states.forEach(s => s.clip >= 0 && order.push(s.clip));
+    else L.states.forEach(s => s.clip >= 0 && exprClips.add(s.clip));
+  }
+  c.clips.forEach((_, i) => { if (!order.includes(i) && !exprClips.has(i)) order.push(i); });
+  for (const i of order) {
+    const cl = c.clips[i];
+    const b = document.createElement('button');
+    b.dataset.i = i;
+    b.innerHTML = `<span>${cl.name}</span><small>${cl.duration.toFixed(2)}s${cl.userData.loop ? ' ↻' : ''}</small>`;
+    b.onclick = () => playClip(i);
+    box.appendChild(b);
+  }
+  if (!order.length) box.innerHTML = '<span class="muted">No animations</span>';
+  const sel = $('animSel'); sel.innerHTML = '';
+  for (const i of order) { const o = document.createElement('option'); o.value = i; o.textContent = c.clips[i].name; sel.appendChild(o); }
+  sel.onchange = () => playClip(+sel.value);
+
+  // expressions
+  const ex = $('expr'); ex.innerHTML = '';
+  c.expr = {};
+  for (const L of c.model.layers) {
+    if (L.index === 0 || L.weight > 0) continue;   // weight>0 layers (Loop Layer) always play
+    for (const s of L.states) {
+      if (s.clip < 0) continue;
+      const clip = c.clips[s.clip];
+      const src = clip.userData.src;
+      // distinct steps in the lookup clip
+      const steps = [];
+      const dt = src.duration / Math.max(1, src.frames - 1);
+      let last = null;
+      for (let f = 0; f < src.frames; f++) {
+        const t = f * dt;
+        const sig = clip.tracks.map(tr => Array.from(tr.createInterpolant().evaluate(t)).map(x => x.toFixed(4)).join(',')).join('|');
+        if (sig !== last) { steps.push(t); last = sig; }
+      }
+      const row = document.createElement('div'); row.className = 'row';
+      row.innerHTML = `<label>${L.name.replace(' Layer', '')}</label><input type="range" min="-1" max="${steps.length - 1}" step="1" value="-1"><span class="v">off</span>`;
+      const inp = row.querySelector('input'), val = row.querySelector('.v');
+      inp.oninput = () => {
+        const k = +inp.value;
+        c.expr[L.index] = k < 0 ? null : { clip: s.clip, time: steps[k] + 1e-4 };
+        val.textContent = k < 0 ? 'off' : k;
+      };
+      ex.appendChild(row);
+    }
+  }
+  $('exprSec').style.display = ex.children.length ? '' : 'none';
+
+  // meshes
+  const mb = $('meshes'); mb.innerHTML = ''; mb.classList.remove('muted');
+  c.meshes.forEach(m => {
+    const l = document.createElement('label'); l.className = 'check';
+    const driven = c.model.visDrivers.some(d => c.meshes[d.mesh] === m);
+    l.innerHTML = `<input type="checkbox" checked> ${m.md.name.replace(c.name + '_', '')} <small>${m.md.vertexCount}v${driven ? ' · anim-driven' : ''}</small>`;
+    l.querySelector('input').onchange = e => { m.userVisible = e.target.checked; };
+    mb.appendChild(l);
+  });
+  // materials
+  const mt = $('mats'); mt.innerHTML = ''; mt.classList.remove('muted');
+  c.model.materials.forEach(m => {
+    const d = document.createElement('div'); d.style.margin = '4px 0';
+    d.innerHTML = `<div>${m.name.replace(c.name + '-', '')}</div><small class="muted">${m.shaderName || '?'} ${m.keywords.join(' ')} → ${m.passes.map(p => p.shader.replace('.json', '')).join(', ') || 'no pass'}</small>`;
+    mt.appendChild(d);
+  });
+}
+
+function frameModel() {
+  const c = current; if (!c) return;
+  c.mixer.update(0);
+  applyDrivers();
+  updateBones();
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  for (const m of c.meshes) {
+    if (!m.group.visible && c.meshes.some(x => x.group.visible)) continue;
+    const pos = m.md.attributes.a_POSITION0; if (!pos) continue;
+    const arr = m.parts[0]?.geometry.getAttribute('a_POSITION0').array; if (!arr) continue;
+    const step = Math.max(1, Math.floor(arr.length / 3 / 2000));
+    for (let i = 0; i < arr.length / 3; i += step) {
+      v.fromArray(arr, i * 3);
+      if (m.skin) {
+        // approximate skinned position using rest bone matrices
+        const si = m.parts[0].geometry.getAttribute('a_skinIndex'), sw = m.parts[0].geometry.getAttribute('a_skinWeight');
+        const out = new THREE.Vector3(); const t = new THREE.Vector3();
+        for (let k = 0; k < 4; k++) {
+          const w = sw.array[i * 4 + k]; if (!w) continue;
+          const bi = si.array[i * 4 + k];
+          tmpM.fromArray(m.boneData, bi * 16);
+          t.copy(v).applyMatrix4(tmpM).multiplyScalar(w); out.add(t);
+        }
+        v.copy(out);
+      } else v.applyMatrix4(m.md.node >= 0 ? c.nodes[m.md.node].matrixWorld : IDENT);
+      box.expandByPoint(v);
+    }
+  }
+  if (box.isEmpty()) box.set(new THREE.Vector3(-1, 0, -1), new THREE.Vector3(1, 2, 1));
+  const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+  const radius = Math.max(size.length() * 0.5, 0.05);
+  const dist = radius / Math.sin(THREE.MathUtils.degToRad(camera.fov) / 2) * 1.05;
+  controls.target.copy(center);
+  camera.position.copy(center).add(new THREE.Vector3(0.35, 0.25, 1).normalize().multiplyScalar(dist));
+  camera.near = dist / 100; camera.far = dist * 100; camera.updateProjectionMatrix();
+  grid.scale.setScalar(Math.max(radius, 0.1) / 1.5);
+  grid.position.set(center.x, box.min.y, center.z);
+  controls.update();
+}
+
+// list
+let index = [];
+function renderList() {
+  const q = $('search').value.trim().toLowerCase();
+  const shinyOnly = $('fShiny').checked, hideShiny = $('fNormal').checked;
+  const list = $('list'); list.innerHTML = '';
+  const frag = document.createDocumentFragment();
+  let n = 0;
+  for (const e of index) {
+    const shiny = /_rare$/.test(e.name);
+    if (shinyOnly && !shiny) continue;
+    if (hideShiny && shiny) continue;
+    if (q && !e.name.toLowerCase().includes(q) && !prettyName(e.name).toLowerCase().includes(q)) continue;
+    const d = document.createElement('div');
+    d.className = 'item' + (current && current.name === e.name ? ' sel' : '');
+    d.dataset.name = e.name;
+    const dex = (e.name.match(/^pm(\d{4})/) || [])[1];
+    d.innerHTML = `<span class="n">${dex ? `<span class="t">#${dex}</span> ` : ''}${prettyName(e.name).replace('★', '<span class="star">★</span>')}</span><span class="t">${e.anims ? e.anims + '▶' : ''}</span>`;
+    d.title = e.name;
+    d.onclick = () => select(e.name);
+    frag.appendChild(d);
+    if (++n > 4000) break;
+  }
+  list.appendChild(frag);
+}
+async function select(name) {
+  document.querySelectorAll('.item.sel').forEach(x => x.classList.remove('sel'));
+  document.querySelector(`.item[data-name="${name}"]`)?.classList.add('sel');
+  history.replaceState(null, '', '?m=' + encodeURIComponent(name));
+  try { await loadModel(name); }
+  catch (e) { console.error(e); $('status').textContent = 'Failed: ' + e.message; }
+}
+
+// controls wiring
+$('search').oninput = renderList; $('fShiny').onchange = renderList; $('fNormal').onchange = renderList;
+$('bPlay').onclick = () => { playing = !playing; $('bPlay').textContent = playing ? 'Pause' : 'Play'; $('bPlay').classList.toggle('on', playing); };
+$('bLoop').onclick = () => { looping = !looping; $('bLoop').classList.toggle('on', looping); if (current) playClip(current.clipIndex); };
+$('bRest').onclick = () => { if (current) { playClip(-1); } };
+$('speed').oninput = () => { speed = +$('speed').value; $('vSpeed').textContent = speed.toFixed(2); };
+$('timeline').oninput = () => {
+  if (!current?.action) return;
+  playing = false; $('bPlay').textContent = 'Play'; $('bPlay').classList.remove('on');
+  current.action.time = +$('timeline').value; current.action.paused = false; current.mixer.update(0);
+};
+function updLight() {
+  const az = THREE.MathUtils.degToRad(+$('lAz').value), el = THREE.MathUtils.degToRad(+$('lEl').value);
+  G.lightLocal = new THREE.Vector3(Math.sin(az) * Math.cos(el), Math.sin(el), Math.cos(az) * Math.cos(el));
+  G.coef = +$('lCoef').value; G.glare = +$('lGlare').value;
+  const col = new THREE.Color($('lCol').value); G.lightColor.set(col.r, col.g, col.b, 1);
+  $('vAz').textContent = $('lAz').value; $('vEl').textContent = $('lEl').value;
+  $('vCoef').textContent = G.coef.toFixed(2); $('vGlare').textContent = G.glare.toFixed(2);
+}
+['lAz', 'lEl', 'lCoef', 'lGlare', 'lCol'].forEach(id => $(id).oninput = updLight); updLight();
+$('bg').oninput = () => renderer.setClearColor($('bg').value); renderer.setClearColor($('bg').value);
+$('vGrid').onchange = () => grid.visible = $('vGrid').checked;
+$('vBones').onchange = () => { if (skelHelper) skelHelper.visible = $('vBones').checked; };
+$('bFrame').onclick = frameModel;
+
+// ---- fullscreen / immersive (panels hidden) ----
+function setImmersive(on) { $('app').classList.toggle('immersive', on); setTimeout(() => { resize(); }, 50); }
+async function toggleFullscreen() {
+  const el = document.documentElement;
+  if (!document.fullscreenElement && el.requestFullscreen) {
+    try { await el.requestFullscreen({ navigationUI: 'hide' }); } catch (e) {}
+    try { await screen.orientation?.lock?.('any'); } catch (e) {}
+    setImmersive(true);
+  } else if (document.fullscreenElement) {
+    await document.exitFullscreen();
+  } else setImmersive(!$('app').classList.contains('immersive'));   // no Fullscreen API (iOS): just hide panels
+}
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) setImmersive(false); });
+$('bFull').onclick = toggleFullscreen;
+$('bPanels').onclick = () => setImmersive(!$('app').classList.contains('immersive'));
+function stepModel(d) {
+  const items = [...document.querySelectorAll('#list .item')];
+  if (!items.length) return;
+  let k = items.findIndex(x => x.classList.contains('sel'));
+  k = (k + d + items.length) % items.length;
+  select(items[k].dataset.name);
+}
+$('bPrev').onclick = () => stepModel(-1);
+$('bNext').onclick = () => stepModel(1);
+window.addEventListener('keydown', e => {
+  if (e.target.matches('input, select, textarea')) return;
+  if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+  else if (e.key === 'h' || e.key === 'H') setImmersive(!$('app').classList.contains('immersive'));
+  else if (e.key === 'ArrowRight' || e.key === 'ArrowDown') { stepModel(1); e.preventDefault(); }
+  else if (e.key === 'ArrowLeft' || e.key === 'ArrowUp') { stepModel(-1); e.preventDefault(); }
+});
+if (params.get('app') === '1' || matchMedia('(display-mode: fullscreen), (display-mode: standalone)').matches) setImmersive(true);
+if (!/ModelViewerApp/.test(navigator.userAgent) && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost' || location.hostname === '127.0.0.1')) {
+  navigator.serviceWorker.register('sw.js').catch(() => {});
+}
+$('bShot').onclick = () => {
+  const a = document.createElement('a'); a.download = (current?.name || 'model') + '.png';
+  a.href = canvas.toDataURL('image/png'); a.click();
+};
+
+// ---------------------------------------------------------------- loop
+function tick() {
+  const dt = Math.min(clock.getDelta(), 0.1);
+  G.time += dt;
+  if (current) {
+    if (playing) current.mixer.update(dt * speed);
+    if (current.action) { $('timeline').value = current.action.time; $('vTime').textContent = current.action.time.toFixed(2); }
+    applyExpressions();
+    applyDrivers();
+    updateBones();
+    if ($('vRotate').checked) current.root.rotation.y += dt * 0.5;
+  }
+  // light direction: either fixed in world, or relative to camera (like a studio key light)
+  if ($('lFollow').checked) G.lightDir.copy(G.lightLocal).applyQuaternion(camera.quaternion).normalize();
+  else G.lightDir.copy(G.lightLocal).normalize();
+  controls.update();
+  renderer.render(scene, camera);
+  requestAnimationFrame(tick);
+}
+
+// errors from shader compilation -> show on screen
+const origErr = console.error.bind(console);
+console.error = (...a) => { origErr(...a); const s = a.map(String).join(' '); if (/THREE|shader|WebGL/i.test(s)) $('errors').textContent = s.slice(0, 2000); };
+
+(async () => {
+  resize();
+  try {
+    CATALOG = await fetch('catalog.json', { cache: 'no-cache' }).then(r => r.json());
+    index = CATALOG.models.map(m => ({ name: m.name, group: m.group }));
+    NAMES = CATALOG.names || {};
+    index.sort((a, b) => (a.name.startsWith('pm') ? 0 : 1) - (b.name.startsWith('pm') ? 0 : 1) || a.name.localeCompare(b.name));
+  } catch (e) {
+    $('status').innerHTML = 'Could not load <code>catalog.json</code>.<br>Run <code>python prepare.py</code>, then serve this folder (<code>serve.bat</code>).';
+    return;
+  }
+  $('status').textContent = index.length ? 'Pick a model' : 'No models exported yet';
+  renderList();
+  const want = params.get('m') || (index[0] && index[0].name);
+  if (params.get('anim')) window.__wantAnim = params.get('anim');
+  tick();
+  if (want) {
+    await select(want);
+    if (window.__wantAnim && current) {
+      const i = current.clips.findIndex(c => c.name.includes(window.__wantAnim));
+      if (i >= 0) playClip(i);
+    }
+    if (params.get('rest')) playClip(-1);
+    ['eye', 'mouth'].forEach((k, i) => {
+      if (params.get(k) == null) return;
+      const inp = document.querySelectorAll('#expr input')[k === 'eye' ? document.querySelectorAll('#expr input').length - 2 : document.querySelectorAll('#expr input').length - 1];
+      if (inp) { inp.value = params.get(k); inp.dispatchEvent(new Event('input')); }
+    });
+    if (params.get('t') && current?.action) { playing = false; current.action.time = +params.get('t'); current.mixer.update(0); }
+    if (params.get('zoom') || params.get('az') || params.get('el') || params.get('ty')) {
+      const off = camera.position.clone().sub(controls.target);
+      const sph = new THREE.Spherical().setFromVector3(off);
+      if (params.get('zoom')) sph.radius /= +params.get('zoom');
+      if (params.get('az')) sph.theta = THREE.MathUtils.degToRad(+params.get('az'));
+      if (params.get('el')) sph.phi = THREE.MathUtils.degToRad(90 - +params.get('el'));
+      if (params.get('ty')) controls.target.y += +params.get('ty');
+      camera.position.copy(controls.target).add(new THREE.Vector3().setFromSpherical(sph));
+      controls.update();
+    }
+  }
+})();
+</script>
+</body>
+</html>
